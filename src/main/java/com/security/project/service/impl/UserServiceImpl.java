@@ -1,68 +1,150 @@
 package com.security.project.service.impl;
 
-import com.mysql.jdbc.StringUtils;
+import com.security.project.dto.AuthUserDTO;
+import com.security.project.dto.LoginDTO;
 import com.security.project.dto.RestMessageDTO;
 import com.security.project.dto.UserDTO;
 import com.security.project.entity.UserEntity;
 import com.security.project.repository.UserRepository;
+import com.security.project.service.EmailService;
 import com.security.project.service.UserService;
-import com.security.project.utils.ObjectMapperUtils;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.security.authentication.*;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.AuthenticationException;
+import org.springframework.security.core.GrantedAuthority;
+import org.springframework.security.core.context.SecurityContext;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.util.HashMap;
+import java.util.Map;
 
 @Service
 public class UserServiceImpl implements UserService {
 
-    private UserRepository userRepository;
-    private ObjectMapperUtils modelMapper;
-    private PasswordEncoder passwordEncoder;
-
     @Autowired
-    public UserServiceImpl(UserRepository userRepository, ObjectMapperUtils modelMapper, PasswordEncoder passwordEncoder) {
-        this.userRepository = userRepository;
-        this.modelMapper = modelMapper;
-        this.passwordEncoder = passwordEncoder;
-    }
+    private EmailService emailService;
 
-    @Override
-    public RestMessageDTO createAccountForUser(UserDTO userDto) {
-        if (userDto.getId() <= 0 ||
-                StringUtils.isNullOrEmpty(userDto.getLogin()) ||
-                StringUtils.isNullOrEmpty(userDto.getEmail()) ||
-                StringUtils.isNullOrEmpty(userDto.getPassword()) ||
-                StringUtils.isNullOrEmpty(userDto.getPasswordConfirm())) {
-            throw new RuntimeException("Invalid data");
+    private final Logger LOGGER = LoggerFactory.getLogger(UserServiceImpl.class);
+    @Autowired
+    private UserRepository userRepository;
+//    @Autowired
+//    private ObjectMapperUtils modelMapper;
+    @Autowired
+    private PasswordEncoder passwordEncoder;
+    @Autowired
+    private AuthenticationManager authManager;
+
+    @Transactional
+    public RestMessageDTO createNotEnabledUser(UserDTO registrationDTO) {
+        if (isNotFilledFieldsExist(registrationDTO)) {
+            return RestMessageDTO.createFailureMessage("Failed to create user, fill all required fields");
         }
-        if (!userDto.getPassword().equals(userDto.getPasswordConfirm())
-        ) {
-            throw new RuntimeException("Incorrect passwordConfirm");
+        if (!registrationDTO.getPassword().equals(registrationDTO.getPasswordConfirm())) {
+            return RestMessageDTO.createFailureMessage("Failed to create user, passwords do not match");
         }
-        if (emailExist(userDto.getEmail())) {
-            throw new RuntimeException("Exist user with " + userDto.getEmail() + " email exist");
+        UserEntity existingUser = userRepository.findByEmail(registrationDTO.getEmail());
+        if (existingUser != null) {
+            return RestMessageDTO.createFailureMessage("User already registered");
         }
-        UserEntity user = new UserEntity();
-        user.setEmail(userDto.getEmail());
-        user.setLogin(userDto.getLogin());
-        user.setPassword(passwordEncoder.encode(userDto.getPassword()));
+
+        String hashedPassword = passwordEncoder.encode(registrationDTO.getPassword());
+        UserEntity user = UserDTO.toUser(registrationDTO.getEmail(),registrationDTO.getLogin(), hashedPassword);
         userRepository.save(user);
-        return RestMessageDTO.createCorrectMessage("Create new user");
+
+        return new RestMessageDTO("Success", true);
     }
 
-    private boolean emailExist(String email) {
-        return userRepository.findByEmail(email) != null;
+
+
+    @Override
+    public AuthUserDTO getLoginUser() {
+        SecurityContext securityContext = SecurityContextHolder.getContext();
+        return transformAuthenticationToAuthUserDTO( securityContext.getAuthentication());
+    }
+
+
+    private boolean isNotFilledFieldsExist(UserDTO registrationDTO) {
+        return registrationDTO.getEmail() == null ||
+                registrationDTO.getEmail().isEmpty() ||
+                registrationDTO.getLogin().isEmpty()||
+                registrationDTO.getPassword() == null ||
+                registrationDTO.getPassword().isEmpty() ||
+                registrationDTO.getPasswordConfirm() == null ||
+                registrationDTO.getPasswordConfirm().isEmpty();
     }
 
     @Override
-    public RestMessageDTO<UserDTO> findUserByEmail(String email) {
-        if (StringUtils.isNullOrEmpty(email)) {
-            throw new RuntimeException("Email is null or empty");
+    public AuthUserDTO authenticateUser(LoginDTO loginUserDTO) {
+        UsernamePasswordAuthenticationToken authenticationToken =
+                new UsernamePasswordAuthenticationToken(loginUserDTO.getEmail().trim(),
+                loginUserDTO.getPassword());
+        Authentication authentication;
+        try {
+            authentication = this.authManager.authenticate(authenticationToken);
+        } catch (DisabledException e) {
+            LOGGER.error("Failed to authenticate : " + loginUserDTO.getEmail(), e);
+            return new AuthUserDTO(null,
+                    null, "Please confirm your sign up using link in your email",
+                    true, false, true);
+        } catch (BadCredentialsException e) {
+            LOGGER.error("Failed to authenticate : " + loginUserDTO.getEmail(), e);
+            return new AuthUserDTO(null,
+                    null, "Invalid credentials",
+                    true, false, true);
+        } catch (AccountExpiredException e) {
+            LOGGER.error("Failed to authenticate : " + loginUserDTO.getEmail(), e);
+            return new AuthUserDTO(null,
+                    null, "Your account has expired",
+                    true, true, true);
+        } catch (AuthenticationException e) {
+            LOGGER.error("Failed to authenticate : " + loginUserDTO.getEmail(), e);
+            return new AuthUserDTO(null,
+                    null, "Failed to authenticate, please check your credentials",
+                    true, false, true);
         }
-        UserEntity entity = userRepository.findByEmail(email);
-        if (entity == null) {
-            throw new RuntimeException("Doesn't exist user");
-        }
-        UserDTO userDTO=modelMapper.map(entity,UserDTO.class);
-        return new RestMessageDTO<>(userDTO,true);
+        SecurityContextHolder.getContext().setAuthentication(authentication);
+
+        return transformAuthenticationToAuthUserDTO(authentication);
     }
+
+    private AuthUserDTO transformAuthenticationToAuthUserDTO(Authentication authentication) {
+        if (authentication == null) {
+            return new AuthUserDTO(
+                    null,
+                    null,
+                    "Failed to obtain authentication, please check your credentials",
+                    false,
+                    false,
+                    false);
+        }
+        Object principal = authentication.getPrincipal();
+        if (principal instanceof String && (principal).equals("anonymousUser")) {
+            return new AuthUserDTO(null, null, "Anonymous", false, false, true);
+        }
+        UserDetails userDetails = (UserDetails) principal;
+        UserEntity user = userRepository.findByEmail(userDetails.getUsername());
+        AuthUserDTO userDTO = new AuthUserDTO(user.getEmail(), true, false, false, "Success", createRoleMap(userDetails));
+        return userDTO;
+    }
+
+    private static Map<String, Boolean> createRoleMap(UserDetails userDetails) {
+        Map<String, Boolean> roles = new HashMap<>();
+        for (GrantedAuthority authority : userDetails.getAuthorities()) {
+            roles.put(authority.getAuthority(), Boolean.TRUE);
+        }
+        return roles;
+    }
+
+
+
+
+
+
 }

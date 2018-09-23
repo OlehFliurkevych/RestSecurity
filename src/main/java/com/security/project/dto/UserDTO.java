@@ -1,5 +1,7 @@
 package com.security.project.dto;
 
+import com.security.project.entity.UserEntity;
+import com.security.project.enumeration.UserRole;
 import com.security.project.validation.ValidEmail;
 import lombok.*;
 
@@ -8,7 +10,9 @@ import javax.validation.constraints.NotEmpty;
 import javax.validation.constraints.NotNull;
 
 @Builder
-@Data
+//@Data
+@Setter
+@Getter
 @EqualsAndHashCode
 @NoArgsConstructor
 @AllArgsConstructor
@@ -34,4 +38,10 @@ public class UserDTO {
     @NotNull
     private String passwordConfirm;
 
+    @NotNull
+    private UserRole userRole;
+
+    public static UserEntity toUser(String email,String login, String hashedPassword) {
+        return new UserEntity(email,login, hashedPassword, UserRole.ROLE_ADMIN);
+    }
 }
