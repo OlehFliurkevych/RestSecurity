@@ -1,5 +1,6 @@
 package com.security.project.service.impl;
 
+import com.mysql.jdbc.StringUtils;
 import com.security.project.dto.AuthUserDTO;
 import com.security.project.dto.LoginDTO;
 import com.security.project.dto.RestMessageDTO;
@@ -28,18 +29,21 @@ import java.util.Map;
 @Service
 public class UserServiceImpl implements UserService {
 
-    @Autowired
-    private EmailService emailService;
 
     private final Logger LOGGER = LoggerFactory.getLogger(UserServiceImpl.class);
     @Autowired
     private UserRepository userRepository;
-//    @Autowired
-//    private ObjectMapperUtils modelMapper;
+    @Autowired
+    private EmailService emailService;
     @Autowired
     private PasswordEncoder passwordEncoder;
     @Autowired
     private AuthenticationManager authManager;
+
+
+
+
+
 
     @Transactional
     public RestMessageDTO createNotEnabledUser(UserDTO registrationDTO) {
@@ -67,6 +71,20 @@ public class UserServiceImpl implements UserService {
     public AuthUserDTO getLoginUser() {
         SecurityContext securityContext = SecurityContextHolder.getContext();
         return transformAuthenticationToAuthUserDTO( securityContext.getAuthentication());
+    }
+
+    @Override
+    public RestMessageDTO sendMessageToUser(String mail) {
+        if(StringUtils.isNullOrEmpty(mail)){
+            throw new RuntimeException("No request param email");
+        }
+        UserEntity user=userRepository.findByEmail(mail);
+        if (user==null)throw new RuntimeException("Doesn't exist user with this email");
+        emailService.sendHtmlEmail(
+                user.getEmail(),
+                "Welcome "+user.getLogin(),
+                "Hello "+user.getLogin()+" ! Thank you for registration! Have a nice day!");
+        return RestMessageDTO.createCorrectMessage("Succes email sending");
     }
 
 

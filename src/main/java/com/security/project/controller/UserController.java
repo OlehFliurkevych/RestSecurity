@@ -4,7 +4,6 @@ import com.security.project.dto.AuthUserDTO;
 import com.security.project.dto.LoginDTO;
 import com.security.project.dto.RestMessageDTO;
 import com.security.project.dto.UserDTO;
-import com.security.project.service.EmailService;
 import com.security.project.service.UserService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -17,8 +16,6 @@ public class UserController  {
     @Autowired
     private UserService userService;
 
-    @Autowired
-    private EmailService emailService;
 
     @RequestMapping(value = "/public/user/sign-up", method = RequestMethod.POST)
     public RestMessageDTO singUp(@RequestBody UserDTO registrationDTO) {
@@ -43,10 +40,8 @@ public class UserController  {
     }
 
 
-    @RequestMapping(value="/public/user/send",method = RequestMethod.GET)
-    public void sendEmailToUser(){
-        emailService.sendHtmlEmail("oleh.fliurkevych@gmail.com",
-                "Email",
-                "Hello!");
+    @RequestMapping(value="/public/user/send/",method = RequestMethod.GET)
+    public RestMessageDTO sendEmailToUser(@RequestParam("email")String email){
+        return userService.sendMessageToUser(email);
     }
 }

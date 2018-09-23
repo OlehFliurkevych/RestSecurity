@@ -12,4 +12,6 @@ public interface UserService {
     AuthUserDTO authenticateUser(LoginDTO loginUserDTO);
 
     AuthUserDTO getLoginUser();
+
+    RestMessageDTO sendMessageToUser(String mail);
 }
