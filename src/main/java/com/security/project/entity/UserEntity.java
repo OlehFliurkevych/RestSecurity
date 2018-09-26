@@ -24,6 +24,8 @@ public class UserEntity {
     @Enumerated(EnumType.STRING)
     private UserRole role;
     private Boolean activated = false;
+    @OneToOne(mappedBy = "user")
+    private VerificationTokenEntity verificationToken;
 
     public UserEntity(String email, String login, String password, UserRole role) {
         this.email = email;

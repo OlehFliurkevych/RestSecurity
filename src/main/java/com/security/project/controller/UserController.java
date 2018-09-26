@@ -7,11 +7,14 @@ import com.security.project.dto.UserDTO;
 import com.security.project.service.UserService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.core.context.SecurityContextHolder;
-import org.springframework.web.bind.annotation.*;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestMethod;
+import org.springframework.web.bind.annotation.RestController;
 
 
 @RestController
-public class UserController  {
+public class UserController {
 
     @Autowired
     private UserService userService;
@@ -21,6 +24,7 @@ public class UserController  {
     public RestMessageDTO singUp(@RequestBody UserDTO registrationDTO) {
         return userService.createNotEnabledUser(registrationDTO);
     }
+
 
     @RequestMapping(value = "/public/user/login", method = RequestMethod.POST)
     public AuthUserDTO login(@RequestBody LoginDTO loginUserDTO) {
@@ -40,8 +44,12 @@ public class UserController  {
     }
 
 
-    @RequestMapping(value="/public/user/send/",method = RequestMethod.GET)
-    public RestMessageDTO sendEmailToUser(@RequestParam("email")String email){
-        return userService.sendMessageToUser(email);
-    }
+
+
+//    @RequestMapping(value="/public/user/send/",method = RequestMethod.GET)
+//    public RestMessageDTO sendEmailToUser(@RequestParam("email")String email){
+//        return userService.sendMessageToUser(email);
+//    }
+
+
 }

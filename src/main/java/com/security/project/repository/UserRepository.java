@@ -1,6 +1,5 @@
 package com.security.project.repository;
 
-import com.security.project.dto.RestMessageDTO;
 import com.security.project.entity.UserEntity;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
